@@ -1,0 +1,272 @@
+---
+title: "Projekt_1"
+author: "Kamil Sarzyniak, Piotr Stawarski"
+date: '2024-10-08'
+output: html_document
+---
+Wersja E
+Na podstawie danych dziennych obliczyć zwykłe i logarytmiczne miesięczne stopy zwrotu (zamknięcie – zamknięcie) przyjmując rozważając miesięczne okna rozpoczynające się w różnych dniach miesiąca tzn. obliczyć stopy zwrotu pierwszy – pierwszy, piąty-piąty, dziesiąty-dziesiąty itd. (w przypadku braku notowań w danym dniu tygodnia wziąć pod uwagę ostatnią dostępną cenę przed tym dniem).
+
+Pobranie bibliotek:
+```{r}
+library("tidyverse")
+library("moments")
+```
+
+
+```{r}
+cdr_d <- read.csv2("C:/Visual_Studio/Ekonometria finansowa i dynamiczna/Projekt_1/cdr_d.csv", header=TRUE, sep=",")
+indeksy <- cdr_d[,c(1,5)]
+```
+
+Stopa zwykła:
+```{r}
+st_z <- function(a,b) {
+  return((a-b)/b)
+}
+```
+
+
+Stopa logarytmiczna
+```{r}
+st_l <- function(a,b) {
+  return(log(a/b))
+}
+
+dane <- indeksy %>% map_df(rev)
+```
+
+Wyszukiwanie dnia lub ostatniego przed nim
+```{r}
+last_d <- function(dzien) {
+  dzien <- as.Date(dzien)
+  daty <- as.Date(dane$Data)
+  naj <- max(daty[daty<=dzien])
+  return(as.character(naj))
+}
+```
+
+Wybrane 5 dni dla których sprawdzamy indeksy zamknięcia
+```{r}
+dni <- c("02","07","13","21","28")
+
+stopy_zwykle <- data.frame(
+  Dni <- dni
+)
+stopy_log <- data.frame(
+  Dni <- dni
+)
+
+miesiace <- unique(substr(dane$Data,start=1,stop=7))
+```
+
+Wyliczanie szczegółów stóp zwrotu dla danych dni
+```{r}
+for (m in head(miesiace,-1)) {
+  szereg_z <- c()
+  szereg_l <- c()
+  for (d in dni) {
+    d1 <- last_d(paste(m,d,sep="-"))
+    d2 <- last_d(paste(miesiace[match(m,miesiace)+1],d,sep="-"))
+    id1 <- as.numeric(dane$Zamkniecie[dane$Data==d1])
+    id2 <- as.numeric(dane$Zamkniecie[dane$Data==d2])
+    szereg_z <- c(szereg_z,st_z(id1,id2))
+    szereg_l <- c(szereg_l,st_l(id1,id2))
+  }
+  stopy_zwykle[[m]] <- szereg_z
+  stopy_log[[m]] <- szereg_l
+}
+```
+
+
+```{r}
+rownames(stopy_zwykle) <- stopy_zwykle[,1]
+stopy_zwykle <- stopy_zwykle[,-1]
+rownames(stopy_log) <- stopy_log[,1]
+stopy_log <- stopy_log[,-1]
+```
+
+
+```{r}
+# Obliczenie podstawowych charakterystyk dla stóp zwrotu
+basic_stats <- function(returns) {
+  return(data.frame(
+  Mean = apply(returns, 1, mean),
+  Min = apply(returns, 1, min),
+  Max = apply(returns, 1, max),
+  SD = apply(returns, 1, sd),
+  Skewness = apply(returns, 1, skewness),
+  Kurtosis = apply(returns, 1, kurtosis)
+))
+  
+}
+
+stats_zwykle <- basic_stats(stopy_zwykle)
+stats_log <- basic_stats(stopy_log)
+
+# Wyświetlenie wyników
+print("Podstawowe charakterystyki dla wszystkich stóp zwrotu zwykłych:")
+print(stats_zwykle)
+
+print("Podstawowe charakterystyki dla wszystkich stóp zwrotu logarytmicznych:")
+print(stats_log)
+
+```
+**Średnia:** </br>
+Oba typy stóp wykazują podobne średnie wartości, co wskazuje na spójność w ogólnej tendencji zwrotów między obiema metodami obliczeń. </br>
+**Zmienność:** </br>
+Stopy logarytmiczne charakteryzują się nieco niższym odchyleniem standardowym niż stopy zwykłe, co sugeruje, że logarytmiczne przekształcenie może redukować widoczną zmienność. </br>
+**Odchylenie standardowe:** </br>
+Mniejsze odchylenie standardowe w przypadku stóp logarytmicznych oznacza, że zmienność logarytmicznych stóp zwrotu jest mniejsza niż dla zwykłych. Wynika to z faktu, że logarytmiczna transformacja lepiej radzi sobie z dużymi, nagłymi zmianami cen, które mają większy wpływ na zmienność zwykłych stóp zwrotu. </br>
+**Skośność:** </br>
+Logarytmiczne stopy zwrotu mają tendencję do większej ujemnej skośności w niektórych dniach, co może wskazywać na większą liczbę niż przewidywane niskich zwrotów. </br>
+**Kurtoza:** </br>
+Logarytmiczne stopy zwrotu wykazują wyższą kurtozę, co oznacza bardziej ekstremalne wartości w porównaniu do stóp zwykłych. To wskazuje na większe ryzyko nagłych zmian cen.
+
+```{r}
+# Załadowanie pakietów
+library(tseries)
+library(nortest)
+
+# Funkcja do przeprowadzenia testów normalności
+test_normality <- function(df) {
+  results <- t(apply(df, 1, function(returns) {
+    shapiro <- shapiro.test(returns)           # Shapiro-Wilk test
+    jarque <- jarque.bera.test(returns)        # Jarque-Bera test
+    ad <- ad.test(returns)                     # Anderson-Darling test
+    c(
+      Shapiro_Wilk_p_value = shapiro$p.value,
+      Jarque_Bera_p_value = jarque$p.value,
+      Anderson_Darling_p_value = ad$p.value
+    )
+  }))
+  results_df <- as.data.frame(results)
+  return(results_df)
+}
+
+
+# Przeprowadzenie testów normalności na zsumowanych stopach zwrotu
+normality_zwykle <- test_normality(stopy_zwykle)
+normality_log <- test_normality(stopy_log)
+
+# Wyświetlenie wyników
+print("Testy normalności dla wszystkich stóp zwrotu zwykłych:")
+print(normality_zwykle)
+
+print("Testy normalności dla wszystkich stóp zwrotu logarytmicznych:")
+print(normality_log)
+
+
+```
+**Dla stóp zwrotu zwykłych:**
+W kilku przypadkach (drugi, piąty rząd) możemy odrzucić hipotezę o normalności rozkładu na podstawie wszystkich testów. W trzecim wierszu wszystkie testy sugerują, że możemy zaakceptować hipotezę o normalności.
+
+**Dla stóp zwrotu logarytmicznych:**
+Wyniki testów dla stóp logarytmicznych są bardziej jednoznaczne – w większości przypadków hipoteza o normalności rozkładu jest odrzucana, z wyjątkiem trzeciej serii, gdzie wyniki są mniej zdecydowane.
+
+**Podsumowanie:**
+Logarytmiczne stopy zwrotu wydają się odbiegać od normalności bardziej niż zwykłe stopy zwrotu, co może wynikać z większych odstępstw od skośności i kurtozy w logarytmicznych danych.Tylko jedna seria (trzecia) dla obu typów stóp zwrotu ma wyniki, które sugerują brak istotnych dowodów na odrzucenie normalności.
+
+```{r}
+# Funkcja do obliczenia autokorelacji i przeprowadzenia testu Ljunga-Boxa
+test_autocorrelation <- function(df) {
+  results <- t(apply(df, 1, function(returns) {
+    acf_values <- acf(returns, plot = FALSE)
+    lb_test <- Box.test(returns, lag = 10, type = "Ljung-Box")
+    c(
+      First_Autocorrelation = acf_values$acf[2],
+      Ljung_Box_p_value = lb_test$p.value
+    )
+  }))
+}
+
+# Przeprowadzenie testów autokorelacji dla stóp zwrotu
+autocorr_zwykle <- test_autocorrelation(stopy_zwykle)
+autocorr_log <- test_autocorrelation(stopy_log)
+
+# Wyświetlenie wyników autokorelacji
+print("Autokorelacje i test Ljunga-Boxa dla wszystkich stóp zwrotu zwykłych:")
+print(autocorr_zwykle)
+
+print("Autokorelacje i test Ljunga-Boxa dla wszystkich stóp zwrotu logarytmicznych:")
+print(autocorr_log)
+
+# Funkcja do rysowania wykresu ACF dla każdego rzędu
+plot_acf_for_each_row <- function(df, title_prefix = "ACF for Row") {
+  apply(df, 1, function(row_returns) {
+    # Usuwanie NA z wierszy
+    row_returns <- as.numeric(na.omit(row_returns))
+    
+    # Rysowanie wykresu ACF
+    acf(row_returns, main = paste(title_prefix, which(df == row_returns), sep = " "))
+  })
+}
+
+# Rysowanie wykresu ACF dla stóp zwrotu zwykłych
+plot_acf_for_each_row(stopy_zwykle, title_prefix = "ACF for Simple Returns")
+
+# Rysowanie wykresu ACF dla stóp zwrotu logarytmicznych
+plot_acf_for_each_row(stopy_log, title_prefix = "ACF for Logarithmic Returns")
+
+
+```
+**Autokorelacja dla pierwszego opóźnienia (lagu):** mierzy, w jakim stopniu obecna stopa zwrotu jest skorelowana z poprzednią. </br>
+**P-wartość testu Ljunga-Boxa:**  sprawdza, czy w szeregu czasowym występuje istotna autokorelacja na różnych opóźnieniach (zazwyczaj 10 lagów). Jeśli p-wartość jest niższa niż 0.05, odrzucamy hipotezę zerową o braku autokorelacji.
+
+Stopy zwrotu logarytmiczne wykazują nieco wyższe autokorelacje na pierwszym lag, co może sugerować nieco większe zależności między kolejnymi okresami w porównaniu do stóp zwykłych. Jednak większość serii (zarówno zwykłych, jak i logarytmicznych) nie wykazuje istotnych autokorelacji na poziomie wielu lagów, o czym świadczą wysokie p-wartości testu Ljunga-Boxa. Jedynie w jednej serii logarytmicznych stóp zwrotu możemy zauważyć istotne zależności w kilku lagach, co może sugerować potencjalne wzorce zależności w danych.
+
+```{r}
+# Funkcja do porównania wartości oczekiwanych (średnich) oraz wariancji
+compare_means_variances <- function(df) {
+  n <- nrow(df)
+  t_test_matrix <- matrix(NA, n, n)
+  var_test_matrix <- matrix(NA, n, n)
+  
+  for (i in 1:n) {
+    for (j in 1:n) {
+      if (i != j) {
+        t_test_result <- t.test(unlist(df[i, ]), unlist(df[j, ]))
+        var_test_result <- var.test(unlist(df[i, ]), unlist(df[j, ]))
+        
+        t_test_matrix[i, j] <- t_test_result$p.value
+        var_test_matrix[i, j] <- var_test_result$p.value
+      }
+    }
+  }
+  t_test_df <- as.data.frame(t_test_matrix)
+  var_test_df <- as.data.frame(var_test_matrix)
+  
+  return(list(
+    Mean = t_test_df,
+    Variance = var_test_df
+  ))
+}
+
+# Przeprowadzenie testów dla stóp zwrotu
+comp_z <- compare_means_variances(stopy_zwykle)
+comp_l <- compare_means_variances(stopy_log)
+
+# Wyniki dla stóp zwykłych
+print(comp_z$Mean)
+print(comp_z$Variance)
+
+# Wyniki dla stóp logarytmicznych
+print(comp_l$Mean)
+print(comp_l$Variance)
+
+
+```
+
+Zarówno dla stóp zwrotu zwykłych, jak i logarytmicznych, testy porównujące średnie oraz wariancje wskazują na brak istotnych statystycznie różnic między seriami danych. Wszystkie p-wartości przekraczają próg istotności 0.05, co sugeruje, że poszczególne serie danych mają podobne średnie i wariancje.
+
+
+**Podsumowanie:**
+W ramach przeprowadzonego projektu zbadano charakterystykę stóp zwrotu zarówno zwykłych, jak i logarytmicznych. Celem analizy była ocena autokorelacji, testowanie wartości oczekiwanych (średnich) i wariancji, a także weryfikacja istotności statystycznej tych różnic przy użyciu szeregu testów statystycznych.
+
+**1. Autokorelacja i Test Ljunga-Boxa:**
+Zarówno dla stóp zwrotu zwykłych, jak i logarytmicznych, nie zaobserwowano istotnych autokorelacji. Oznacza to, że dane te nie wykazują silnych zależności czasowych, co może sugerować efektywność rynkową i losowy charakter zmian cen. </br>
+**2. Porównanie Średnich i Wariancji:**
+Zarówno dla stóp zwrotu zwykłych, jak i logarytmicznych, średnie oraz wariancje nie różnią się istotnie pomiędzy seriami. Oznacza to, że charakterystyki statystyczne (średnia i zmienność) tych danych są spójne między różnymi seriami. </br>
+**3. Ogólna charakterystyka stóp zwrotu:**
+Brak istotnych autokorelacji: Analizowane stopy zwrotu, zarówno zwykłe, jak i logarytmiczne, nie wykazują silnych zależności czasowych.
+Jednorodność średnich i wariancji: Porównanie średnich i wariancji nie wskazuje na statystycznie istotne różnice pomiędzy seriami danych. Jest to zgodne z hipotezą o braku wyraźnych anomalii w danych, co sugeruje, że rynek zachowuje się podobnie dla różnych aktywów lub okresów, których dotyczą te stopy zwrotu. Co ważne, należy też zauważyć, że pod koniec miesiąca różnice w wynikach są większe.
