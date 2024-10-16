@@ -19,6 +19,8 @@ for (i in 1:(nrow(dane)-1)) {
   szereg <- c(szereg_l,as.numeric(st_l(dane[i,2],dane[i+1,2])))
 }
 
+plot(szereg, type='l')
+
 #Test ADF
 adf.test(szereg)
 #Bardzo niskie p-value -> szereg stacjonarny
