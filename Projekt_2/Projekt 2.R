@@ -36,5 +36,6 @@ jarque.bera.test(res)
 #P-value mniejsze od 0.05 -> reszty nie mają rozkładu normalnego
 qqnorm(res)
 
-
+#Prognoza logarytmicznych stóp dla 4 przyszłych notowań
+forecast(model,4)$mean
 
