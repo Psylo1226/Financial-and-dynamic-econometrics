@@ -11,7 +11,8 @@ st_l <- function(a,b) {
 
 indeksy <- izo[,c(1,5)]
 indeksy <- indeksy %>% map_df(rev)
-prognoza_stopy <- head(indeksy,4)
+odłożone_stopy <- head(indeksy,5)
+odłożone_ceny <- log(head(indeksy,4)[2])
 dane <- tail(indeksy,-4)
 
 stopy <- c()
@@ -28,7 +29,7 @@ adf.test(stopy)
 #ARMA
 model <- auto.arima(stopy)
 summary(model)
-#Zaproponowany model: ARMA(2,2)
+#Zaproponowany model: ARMA(2,3)
 
 #Reszty modelu
 res <- residuals(model)
@@ -39,5 +40,14 @@ jarque.bera.test(res)
 qqnorm(res)
 
 #Prognoza logarytmicznych stóp dla 4 przyszłych notowań
-forecast(model,4)$mean
+prognoza_zwrotow <- forecast(model,4)$mean
+
+#Model dla logarytmów cen
+model2 <- auto.arima(ceny)
+summary(model2)
+
+prognoza_cen <- forecast(model2,4)$mean
+
+
+
 
