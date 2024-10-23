@@ -11,22 +11,22 @@ st_l <- function(a,b) {
 
 indeksy <- izo[,c(1,5)]
 indeksy <- indeksy %>% map_df(rev)
-prognoza <- head(indeksy,4)
+prognoza_stopy <- head(indeksy,4)
 dane <- tail(indeksy,-4)
 
-szereg <- c()
+stopy <- c()
 for (i in 1:(nrow(dane)-1)) {
-  szereg <- c(szereg_l,as.numeric(st_l(dane[i,2],dane[i+1,2])))
+  stopy <- c(stopy,as.numeric(st_l(dane[i,2],dane[i+1,2])))
 }
 
-plot(szereg, type='l')
+ceny <- log(dane[2])
 
 #Test ADF
-adf.test(szereg)
+adf.test(stopy)
 #Bardzo niskie p-value -> szereg stacjonarny
 
 #ARMA
-model <- auto.arima(szereg)
+model <- auto.arima(stopy)
 summary(model)
 #Zaproponowany model: ARMA(2,2)
 
