@@ -4,7 +4,10 @@ library("tseries")
 library("forecast")
 library("rugarch")
 library("FinTS")
-izo <- read.csv("izo_d.csv")
+install.packages("rugarch")
+install.packages("FinTS")
+install.packages("tinytex")
+izo <- read.csv("C:/Visual_Studio/Ekonometria finansowa i dynamiczna/git/Projekt_2/izo_d.csv")
 
 #Stopa logarytmiczna
 st_l <- function(a,b) {
