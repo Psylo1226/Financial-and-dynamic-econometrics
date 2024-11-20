@@ -20,9 +20,6 @@ simulate_AR1_to_AR3 <- function(N, phi, n_iter = 1000) {
     estimates[i, ] <- fit_ar3$coef[1:3] # Zapisz współczynniki AR(3)
     stderrs[i, ] <- sqrt(diag(fit_ar3$var.coef))[1:3] # Zapisz odchylenia standardowe
     residual_acf[i, ] <- acf(residuals(fit_ar3), plot = FALSE)$acf[2:21] # ACF reszt
-    
-    # Wypisz postęp
-    if (i %% 100 == 0) cat("Iteracja: ", i, "\n")
   }
   
   # Zwróć wyniki
@@ -36,7 +33,6 @@ results <- list()
 
 for (N in N_values) {
   for (phi in phi_values) {
-    cat("Symulacja dla N =", N, "i phi =", phi, "\n")
     results[[paste("N", N, "phi", phi, sep = "_")]] <- simulate_AR1_to_AR3(N, phi)
   }
 }
@@ -94,8 +90,8 @@ phi_vec_values <- list(c(0.5, 0.2, -0.1), c(0.9, -0.4, 0.2))
 
 for (N in N_values) {
   for (phi_vec in phi_vec_values) {
-    cat("Symulacja odwrotna dla N =", N, "i phi_vec =", paste(phi_vec, collapse = ","), "\n")
-    results_reverse[[paste("N", N, "phi_vec", paste(phi_vec, collapse = "_"), sep = "_")]] <- simulate_AR3_to_AR1(N, phi_vec)
+    results_reverse[[paste("N", N, "phi_vec", paste(phi_vec, collapse = "_"),
+                           sep = "_")]] <- simulate_AR3_to_AR1(N, phi_vec)
   }
 }
 
