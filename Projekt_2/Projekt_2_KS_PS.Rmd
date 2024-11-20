@@ -1,0 +1,373 @@
+---
+title: "Projekt_2"
+author: "Kamil Sarzyniak, Piotr Stawarski"
+date: '2024-11-03'
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+```{r}
+library("tidyverse")
+library("moments")
+library("tseries")
+library("forecast")
+library("rugarch")
+library("FinTS")
+```
+
+Dane wykorzystywane w projekcie pochodzą z firmy "Izolacja - Jarocin S.A", które pochodzą z okresu od września 2023 do 4 października 2024.
+```{r}
+izo <- read.csv("C:/Visual_Studio/Ekonometria finansowa i dynamiczna/Projekty/Projekt_2/izo_d.csv")
+```
+
+Stopa logarytmiczna
+```{r}
+st_l <- function(a,b) {
+  return(log(a/b))
+}
+```
+
+Zaczytanie danych
+```{r}
+dane <- izo[,c(1,5)]
+indeksy <- dane %>% map_df(rev)
+```
+
+Wyliczanie stóp logarytmicznych
+```{r}
+dt <- c()
+for (i in 1:(nrow(indeksy)-1)) {
+  dt <- c(dt,as.numeric(st_l(indeksy[i,2],indeksy[i+1,2])))
+}
+```
+
+Podział na zbiór uczący i odłożone dane
+```{r}
+stopy <- rev(tail(dt, -4))
+ceny <- unname(head(log(dane[2]), -4))
+stopy_oct <- rev(head(dt,4))
+ceny_oct <- unname(tail(log(dane[2]), 4))
+ceny_n <- unname(tail(dane[2], 4))
+```
+
+Test ADF
+```{r}
+adf.test(stopy)
+#Bardzo niskie p-value -> szereg stacjonarny
+```
+
+ARMA
+```{r}
+model <- auto.arima(stopy)
+summary(model)
+#Zaproponowany model: ARMA(3,2)
+```
+
+Reszty modelu
+```{r}
+res <- residuals(model)
+Box.test(res, type = "Ljung-Box")
+#P-value większe od 0.05 -> brak aurokorelacji
+jarque.bera.test(res)
+#P-value mniejsze od 0.05 -> reszty nie mają rozkładu normalnego
+```
+
+```{r}
+qqnorm(res)
+```
+
+Prognoza logarytmicznych stóp dla 4 przyszłych notowań i porównanie z odłożonymi wartościami
+```{r}
+stopy_wyniki <- data.frame(
+  Odłożone_Wartości = stopy_oct,
+  Początek_Przedziału = forecast(model,4)$lower[, 2],
+  Koniec_Przedziału = forecast(model,4)$upper[, 2],
+  Średnia_Prognoza = forecast(model,4)$mean
+)
+print(stopy_wyniki)
+```
+Choć prognozy na pierwszym i trzecim notowaniu wykazują zgodność z rzeczywistością, kolejne notowania pokazują ujemne wartości średniej prognozy, co sugeruje przewidywanie spadków w tych okresach.
+
+Model dla logarytmów cen
+```{r}
+model2 <- auto.arima(ceny)
+summary(model2)
+```
+
+```{r}
+res2 <- residuals(model2)
+Box.test(res2, type = "Ljung-Box")
+#P-value większe od 0.05 -> brak aurokorelacji
+jarque.bera.test(res)
+#P-value mniejsze od 0.05 -> reszty nie mają rozkładu normalnego
+```
+
+```{r}
+arima_forecast <- forecast(model2,4)$mean
+```
+
+Porównanie z odłożonymi wartościami
+```{r}
+ceny_wyniki <- data.frame(
+  Odłożone_Wartości = ceny_oct,
+  Początek_Przedziału = forecast(model2,4)$lower[, 2],
+  Koniec_Przedziału = forecast(model2,4)$upper[, 2],
+  Średnia_Prognoza = arima_forecast
+)
+print(ceny_wyniki)
+```
+Dla każdego z analizowanych notowań, wartości dolnej i górnej granicy przedziałów ufności są dość bliskie średniej prognozy, co wskazuje na umiarkowaną zmienność prognoz. Różnice między wartościami prognozowanymi a rzeczywistymi są niewielkie, co może sugerować dobrą jakość modelu w przewidywaniu przyszłych cen.
+
+Analogicznie dla cen niezlogarytmowanych
+```{r}
+ceny_n_wyniki <- data.frame(
+  Odłożone_Wartości = ceny_n,
+  Początek_Przedziału = exp(forecast(model2,4)$lower[, 2]),
+  Koniec_Przedziału = exp(forecast(model2,4)$upper[, 2]),
+  Średnia_Prognoza = exp(arima_forecast)
+)
+print(ceny_n_wyniki)
+```
+W porównaniu do wcześniejszych wyników dotyczących logarytmicznych stóp zwrotu, które wskazywały na większą zmienność i niepewność prognoz, wyniki dla cen niezlogarytmowanych wydają się bardziej spójne. Średnie prognozy cen są niewiele różne od rzeczywistych wartości, co sugeruje, że model skutecznie uchwycił ogólne trendy cenowe w krótkim okresie.
+
+Metody symulacyjne
+```{r}
+# Liczba symulacji
+n <- 1000
+# Długość prognozy (4 notowania)
+h <- 4
+```
+
+Wartość początkowa logarytmów cen (ostatnia znana wartość w cenach)
+```{r}
+last_price <- as.numeric(tail(ceny, 1))
+```
+
+Symulacje Monte Carlo
+```{r}
+set.seed(123)  # Ustawienie ziarna dla powtarzalności wyników
+symulacje <- matrix(0, nrow = n, ncol = h)
+for (i in 1:n) {
+  # Generowanie losowych reszt modelu
+  sim_res <- rnorm(h, mean(res2), sd(res2))
+  # Symulacja logarytmów cen przy użyciu modelu
+  symulacje[i, 1] <- last_price + sim_res[1]
+  for (j in 2:h) {
+    symulacje[i, j] <- (symulacje[i, j-1] + sim_res[j])
+  }
+}
+```
+
+Obliczenie 95% przedziałów ufności dla logarytmów cen
+```{r}
+log_price_forecast_mean_mc <- colMeans(symulacje)
+log_price_forecast_lower <- apply(symulacje, 2, quantile, probs = 0.025)
+log_price_forecast_upper <- apply(symulacje, 2, quantile, probs = 0.975)
+```
+
+Konwersja logarytmów cen do rzeczywistych cen
+```{r}
+symulacje_ceny <- exp(symulacje)
+```
+
+Obliczenie 95% przedziałów ufności dla rzeczywistych cen
+```{r}
+price_forecast_mean <- colMeans(symulacje_ceny)
+price_forecast_lower <- apply(symulacje_ceny, 2, quantile, probs = 0.025)
+price_forecast_upper <- apply(symulacje_ceny, 2, quantile, probs = 0.975)
+```
+
+Tworzenie tabeli porównawczej wyników
+```{r}
+wyniki_monte_carlo <- data.frame(
+  Odłożone_Wartości_Log = ceny_oct,
+  Prognoza_Log_Ceny = log_price_forecast_mean_mc,
+  Przedzial_Log_Ceny_Dolny = log_price_forecast_lower,
+  Przedzial_Log_Ceny_Gorny = log_price_forecast_upper,
+  Odłożone_Wartości = exp(ceny_oct),
+  Prognoza_Ceny = price_forecast_mean,
+  Przedzial_Ceny_Dolny = price_forecast_lower,
+  Przedzial_Ceny_Gorny = price_forecast_upper
+)
+print(wyniki_monte_carlo)
+```
+W kontekście wcześniejszych wyników z modelu ARIMA, które analizowano w odniesieniu do stóp zwrotu oraz cen niezlogarytmowanych, wyniki uzyskane z metody Monte Carlo wydają się bardziej stabilne. Poprzednie analizy wskazywały na większą zmienność prognoz i szersze przedziały ufności, szczególnie dla logarytmicznych stóp zwrotu. Zastosowanie metody Monte Carlo może zatem dostarczyć lepszych prognoz, a także umożliwia bardziej precyzyjne oszacowanie ryzyka.
+
+Metody bootstrapowe
+```{r}
+set.seed(123)  # Ustawienie ziarna dla powtarzalności wyników
+bootstrap <- matrix(0, nrow = n, ncol = h)
+for (i in 1:n) {
+  # Generowanie losowych reszt modelu
+  boot_res <- sample(res2, h, replace = TRUE)
+  # Symulacja logarytmów cen przy użyciu modelu
+  bootstrap[i, 1] <- last_price + boot_res[1]
+  for (j in 2:h) {
+    bootstrap[i, j] <- (bootstrap[i, j-1] + boot_res[j])
+  }
+}
+```
+
+Obliczanie średnich prognoz i 95% przedziałów ufności dla logarytmów cen
+```{r}
+log_price_forecast_mean_bootstrap <- colMeans(bootstrap)
+log_price_forecast_lower <- apply(bootstrap, 2, quantile, probs = 0.025)
+log_price_forecast_upper <- apply(bootstrap, 2, quantile, probs = 0.975)
+```
+
+Konwersja logarytmów cen na rzeczywiste ceny
+```{r}
+bootstrap_prices <- exp(bootstrap)
+```
+
+Obliczanie średnich prognoz i 95% przedziałów ufności dla rzeczywistych cen
+```{r}
+price_forecast_mean <- colMeans(bootstrap_prices)
+price_forecast_lower <- apply(bootstrap_prices, 2, quantile, probs = 0.025)
+price_forecast_upper <- apply(bootstrap_prices, 2, quantile, probs = 0.975)
+```
+
+Tworzenie tabeli wynikowej z prognozami i przedziałami ufności
+```{r}
+wyniki_bootstrap <- data.frame(
+  Odłożone_Wartości_Log = ceny_oct,
+  Prognoza_Log_Ceny = log_price_forecast_mean_bootstrap,
+  Przedzial_Log_Ceny_Dolny = log_price_forecast_lower,
+  Przedzial_Log_Ceny_Gorny = log_price_forecast_upper,
+  Odłożone_Wartości = exp(ceny_oct),
+  Prognoza_Ceny = price_forecast_mean,
+  Przedzial_Ceny_Dolny = price_forecast_lower,
+  Przedzial_Ceny_Gorny = price_forecast_upper
+)
+print(wyniki_bootstrap)
+```
+Dla logarytmicznych cen, przedziały ufności są nieco węższe w analizie bootstrapowej w porównaniu do wyników z Monte Carlo, co sugeruje mniejszą niepewność w prognozach. Podobnie, prognozy cen niezlogarytmowanych są zbieżne z rzeczywistymi wartościami, a wąskie przedziały ufności mogą wskazywać na stabilność modelu.
+
+Porównanie obu metod
+```{r}
+wyniki_porownawcze <- data.frame(
+  Odlozone_Wartosci = ceny_oct,
+  Prognoza_Monte_Carlo = log_price_forecast_mean_mc,
+  Prognoza_Bootstrap = log_price_forecast_mean_bootstrap
+)
+print(wyniki_porownawcze)
+```
+Wartości prognozowane zarówno przez metodę Monte Carlo, jak i bootstrap są bardzo zbliżone do siebie oraz do rzeczywistych odłożonych wartości. </br>
+Różnice pomiędzy prognozami z obu metod są minimalne, co może sugerować, że obie podejścia oferują podobny poziom dokładności w prognozowaniu logarytmicznych cen. Wartości prognoz są zaledwie w niektórych przypadkach różne o kilka punktów dziesiętnych, co nie wpływa istotnie na ogólną interpretację. </br>
+Prognozy z obu metod mieszczą się w wąskich granicach, co świadczy o stabilności prognoz i sugeruje, że zastosowane modele są odpowiednie do przewidywania przyszłych cen.
+
+Efekt ARCH
+```{r}
+spec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model = list(armaOrder = c(3, 2), include.mean = TRUE),
+  distribution.model = "norm"
+)
+model_garch <- ugarchfit(spec = spec, data = ceny)
+print(model_garch)
+```
+Testy Ljung-Boxa wykazują pewien stopień autokorelacji w resztach, co może sugerować niedopasowanie modelu, ale testy ARCH nie wykazują istotnych oznak autokorelacji, co potwierdza dobre dopasowanie.
+
+Prognozy modelu ARMA-GARCH
+```{r}
+forecast_garch <- ugarchforecast(model_garch, n.ahead = h)
+print(forecast_garch)
+```
+
+```{r}
+log_garch_mean <- fitted(forecast_garch)
+print(log_garch_mean)
+```
+
+Reszty z modelu GARCH
+```{r}
+res3 <- residuals(model_garch)
+```
+
+```{r}
+set.seed(123)
+mcg <- matrix(0, nrow = n, ncol = h)
+for (i in 1:n) {
+  # Generowanie losowych reszt modelu
+  sim_res <- rnorm(h, mean(res3), sd(res3))
+  # Symulacja logarytmów cen przy użyciu modelu
+  mcg[i, 1] <- last_price + sim_res[1]
+  for (j in 2:h) {
+    mcg[i, j] <- (mcg[i, j-1] + sim_res[j])
+  }
+}
+```
+
+```{r}
+set.seed(123)
+bootg <- matrix(0, nrow = n, ncol = h)
+for (i in 1:n) {
+  # Generowanie losowych reszt modelu
+  boot_res <- sample(res3, h, replace = TRUE)
+  # Symulacja logarytmów cen przy użyciu modelu
+  bootg[i, 1] <- last_price + boot_res[1]
+  for (j in 2:h) {
+    bootg[i, j] <- (bootg[i, j-1] + boot_res[j])
+  }
+}
+```
+
+```{r}
+log_gmc_mean <- colMeans(mcg)
+gmc_mean <- colMeans(exp(mcg))
+log_bootg_mean <- colMeans(bootg)
+bootg_mean <- colMeans(exp(bootg))
+```
+
+```{r}
+ostatnie_porównanie <- data.frame(
+  Odłożone_Wartości = ceny_oct,
+  Prognoza_ARIMA = arima_forecast,
+  Prognoza_MC = log_price_forecast_mean_mc,
+  Prognoza_Bootstrap = log_price_forecast_mean_bootstrap,
+  Prognoza_GARCH = unname(log_garch_mean),
+  Prognoza_MC_GARCH = log_gmc_mean,
+  Prognoza_Bootstrap_GARCH = log_bootg_mean
+)
+print(ostatnie_porównanie)
+```
+**Porównanie prognoz:** Tabela przedstawia zestawienie prognozowanych wartości uzyskanych z różnych modeli: ARIMA, Monte Carlo, Bootstrap oraz GARCH. Prognozy ARIMA są w dużej mierze zbliżone do prognoz GARCH.
+**Różnice między modelami:** Prognozy oparte na metodach Monte Carlo i Bootstrap w większości przypadków przewidują nieco wyższe wartości niż te uzyskane z modeli ARIMA i GARCH.
+
+Przeprowadzenie testu ARCH
+```{r}
+test_arch1 <- ArchTest(res2)
+print(test_arch1)
+```
+Hipoteza zerowa testu stwierdza, że nie występują efekty ARCH, co oznacza, że wariancja reszt jest stała w czasie. </br>
+Wysoka p-wartość (0.9345) sugeruje, że nie ma wystarczających dowodów, aby odrzucić hipotezę zerową. Oznacza to, że w analizowanych resztach nie ma istotnych efektów ARCH, co wskazuje na stabilność wariancji reszt.
+
+```{r}
+test_arch2 <- ArchTest(residuals(model_garch))
+print(test_arch2)
+```
+Test ARCH sprawdza hipotezę zerową, że nie występują efekty ARCH w resztach modelu, co oznacza, że wariancja reszt jest stała w czasie.</br>
+Wartość p jest znacznie poniżej standardowego poziomu istotności (0.05). Oznacza to, że istnieją silne dowody przeciwko hipotezie zerowej. W związku z tym możemy stwierdzić, że w resztach modelu GARCH występują istotne efekty ARCH. </br>
+
+Podstawowy model nie wykazuje efektu ARCH, jednak przeprowadzając go na modelu GARCH uzyskujemy odwrotny wynik. </br>
+
+**1. Badanie stacjonarności i logarytmicznych stóp zwrotu** </br>
+Wstępna analiza stacjonarności została przeprowadzona za pomocą testu ADF (Augmented Dickey-Fuller). Wyniki wykazały stacjonarność stóp zwrotu, co było kluczowe do przeprowadzenia dalszej analizy czasowej. Osiągnięcie stacjonarności potwierdza, że dane są odpowiednie do modelowania przy użyciu metod ARIMA/ARMA, pozwalając na skuteczniejsze przewidywanie przyszłych zmian cen na podstawie historycznych notowań.Dopasowanie modelu ARIMA Na podstawie wyników testu ADF dobrano model ARIMA, analizując autokorelację składników losowych i weryfikując istotność parametrów przy najwyższych opóźnieniach. Model ARIMA, uwzględniając różne opóźnienia i struktury, umożliwił przewidywanie cen i logarytmicznych stóp zwrotu na podstawie przeszłych danych.
+
+**2. Ceny na 4 przyszłe notowania i porównanie z danymi rzeczywistymi** </br>
+Użycie modelu ARIMA pozwoliło na wygenerowanie prognoz na kolejne cztery notowania. Wartości prognozowane dla cen, logarytmów cen i stóp zwrotu zostały porównane z rzeczywistymi wartościami, a 95% przedział ufności pozwolił na ocenę dokładności modelu. Okazało się, że model jest adekwatny, choć nieco odbiega w niektórych notowaniach, co może wynikać z dynamicznej natury rynków finansowych.
+
+**3. Symulacje Monte Carlo** </br>
+Aby uzyskać dodatkowe prognozy, wykorzystano metodę Monte Carlo. Wyniki tej metody wskazały na szeroki zakres potencjalnych wyników, a przeprowadzone symulacje pozwoliły na wyznaczenie alternatywnych prognoz dla logarytmów cen i ich przedziałów ufności. W porównaniu z prognozami uzyskanymi z modelu ARIMA, metoda Monte Carlo charakteryzowała się wyższą niepewnością, lecz równocześnie dostarczała bardziej zróżnicowany obraz możliwych scenariuszy rynkowych.
+
+**4. Prognozy za pomocą metody bootstrapowej** </br>
+Alternatywnie, zastosowano metodę bootstrapową do wyznaczenia prognoz logarytmów cen oraz samych cen. Wyniki były zbliżone do tych uzyskanych metodą Monte Carlo, jednak bootstrap generował nieco węższe przedziały ufności, co sugeruje większą stabilność prognoz w tej metodzie. Porównanie z prognozami z poprzednich punktów wykazało, że bootstrap generuje bardziej konserwatywne prognozy w stosunku do symulacji Monte Carlo.
+
+**5. Uwzględnienie efektu ARCH w modelu ARMA-GARCH** </br>
+Efekt ARCH został zbadany przy użyciu testu ARCH, po czym zastosowano model ARMA-GARCH, który uwzględnia zmienność warunkową. Model ARMA-GARCH dodatkowo uwzględnia wahania wariancji, co poprawiło dokładność prognoz na dynamicznym rynku. Wyniki wykazały, że model lepiej odzwierciedla rzeczywiste zmiany rynkowe, co sugeruje, że uwzględnienie zmienności warunkowej jest istotne w prognozowaniu na rynku finansowym.
+
+**6. Podsumowanie** </br>
+Podsumowując, analiza wykazała, że model ARIMA jest adekwatny do przewidywania cen na rynku akcji. Jednak uwzględnienie modeli GARCH oraz zastosowanie symulacji Monte Carlo i metod bootstrapowych pozwoliło na uzyskanie pełniejszego obrazu ryzyka i potencjalnych wahań cen. Połączenie tych metod dostarcza szerokiego wglądu w przyszłe notowania i umożliwia lepszą ocenę potencjalnego ryzyka.
