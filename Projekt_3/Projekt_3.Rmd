@@ -86,7 +86,7 @@ summarize_results_by_N_phi <- function(results, n_values, ar_values) {
 ```{r}
 display_summary_by_N_phi <- function(summary_results) {
   for (key in names(summary_results)) {
-    cat(paste0("Długość danych i parametr: ", key, "\n"))
+    cat(paste0("Długość danych i parametr phi: ", key, "\n"))
     print(summary_results[[key]])
     cat("\n")
   }
@@ -101,167 +101,67 @@ display_summary_by_N_phi(summary_results_by_N_phi)
 ```
 
 ```{r}
-prepare_data_for_plot <- function(estimates_all) {
-  estimates_df <- data.frame(estimates_all)
-  estimates_df_long <- estimates_df %>%
-    pivot_longer(cols = everything(), names_to = "variable", values_to = "value")
-  return(estimates_df_long)
-}
-```
-
-```{r}
-plot_histograms <- function(estimates_df_long) {
-  ggplot(estimates_df_long, aes(x = value)) +
-    geom_histogram(bins = 30, color = "black", fill = "skyblue", alpha = 0.7) +
-    facet_wrap(~variable, scales = "free", ncol = 1) +
-    theme_minimal() +
-    labs(
-      title = "Rozkład estymatorów parametrów AR(3) przy danych z AR(1)",
-      x = "Wartość estymatora",
-      y = "Częstość"
-    )
-}
-```
-
-```{r}
-# Podsumowanie wyników
-summary_results <- analyze_all(results, ar_values)
-
-# Wyświetlanie podsumowania
-display_summary(summary_results)
-
-# Analiza dla konkretnej długości danych (N=50)
-N_focus <- "N_50"
-estimates_all <- combine_estimates_for_N(results, N_focus)
-
-# Przygotowanie danych do wykresów
-estimates_df_long <- prepare_data_for_plot(estimates_all)
-
-# Tworzenie histogramów N_50
-plot_histograms(estimates_df_long)
-```
-
-```{r}
-# Podsumowanie wyników
-summary_results <- analyze_all(results, ar_values)
-
-# Wyświetlanie podsumowania
-display_summary(summary_results)
-
-# Analiza dla konkretnej długości danych (N=100)
-N_focus <- "N_100"
-estimates_all <- combine_estimates_for_N(results, N_focus)
-
-# Przygotowanie danych do wykresów
-estimates_df_long <- prepare_data_for_plot(estimates_all)
-
-# Tworzenie histogramów N_100
-plot_histograms(estimates_df_long)
-```
-
-```{r}
-# Podsumowanie wyników
-summary_results <- analyze_all(results, ar_values)
-
-# Wyświetlanie podsumowania
-display_summary(summary_results)
-
-# Analiza dla konkretnej długości danych (N=1000)
-N_focus <- "N_1000"
-estimates_all <- combine_estimates_for_N(results, N_focus)
-
-# Przygotowanie danych do wykresów
-estimates_df_long <- prepare_data_for_plot(estimates_all)
-
-# Tworzenie histogramów N_1000
-plot_histograms(estimates_df_long)
-```
-
-```{r}
-generate_ar3_data <- function(N, params = c(0.1, 0.5, 0.9)) {
-  arima.sim(list(order = c(3, 0, 0), ar = params), n = N)
-}
-```
-
-```{r}
-fit_ar1 <- function(data) {
-  Arima(data, order = c(1, 0, 0))
-}
-```
-
-```{r}
-analyze_single_simulation <- function(N, params = c(0.1, 0.5, 0.9)) {
-  estimates <- matrix(NA, nrow = 1, ncol = 1)
-  stderrs <- matrix(NA, nrow = 1, ncol = 1)
-  residual_acf <- matrix(NA, nrow = 1, ncol = 20)
+results2 <- vector("list", n_reps)
+for (rep in 1:n_reps) {
+  rep_results <- list()
   
-  # Generacja danych i dopasowanie modelu
-  xt_ar3 <- generate_ar3_data(N, params)
-  xt_ar1 <- fit_ar1(xt_ar3)
-  
-  # Zapisywanie wyników
-  estimates[1, ] <- xt_ar1$coef[1]
-  stderrs[1, ] <- sqrt(diag(xt_ar1$var.coef))[1]
-  residual_acf[1, ] <- acf(residuals(xt_ar1), plot = FALSE)$acf[2:21]
-  
-  return(list(estimates = estimates, stderrs = stderrs, residual_acf = residual_acf))
-}
-```
-
-```{r}
-run_simulation_ar3_to_ar1 <- function(n_values, n_reps, params = c(0.1, 0.5, 0.9)) {
-  results <- vector("list", n_reps)
-  
-  for (rep in 1:n_reps) {
-    rep_results <- list()
-    for (N in n_values) {
-      rep_results[[paste0("N_", N)]] <- analyze_single_simulation(N, params)
+  for (N in n_values) {
+    estimates <- matrix(NA, nrow = length(ar_values), ncol = 1)  # Estymatory dla AR(1)
+    stderrs <- matrix(NA, nrow = length(ar_values), ncol = 1)  # Odchylenia standardowe
+    residual_acf <- matrix(NA, nrow = length(ar_values), ncol = 20)  # ACF reszt
+    i <- 1
+    
+    for (AR in ar_values) {
+      # Generowanie danych AR(3) z parametrami AR
+      xt3 = arima.sim(list(order = c(3, 0, 0), ar = c(AR, 0, 0)), n = N)
+      
+      # Dopasowywanie modelu AR(1)
+      xt1 = Arima(xt3, order = c(1, 0, 0))
+      
+      # Zbieranie oszacowanych parametrów
+      estimates[i, ] <- xt1$coef[1]  # Tylko ϕ1 dla AR(1)
+      stderrs[i, ] <- sqrt(diag(xt1$var.coef))[1]  # Odchylenie standardowe dla ϕ1
+      residual_acf[i, ] <- acf(residuals(xt1), plot = FALSE)$acf[2:21]
+      i <- i + 1
     }
-    results[[rep]] <- rep_results
+    rep_results[[paste0("N_", N)]] <- list(
+      estimates = estimates,
+      stderrs = stderrs,
+      residual_acf = residual_acf
+    )
   }
-  
-  return(results)
+  results2[[rep]] <- rep_results
 }
 ```
 
 ```{r}
-# Parametry symulacji
-n_values <- c(50, 100, 1000)
-n_reps <- 1000
-ar3_params <- c(0.1, 0.5, 0.9)
-
-# Uruchomienie symulacji
-results_ar3_to_ar1 <- run_simulation_ar3_to_ar1(n_values, n_reps, ar3_params)
-```
-
-```{r}
-get_estimates_ar1 <- function(results, N) {
-  do.call(rbind, lapply(results, function(rep) rep[[N]]$estimates))
-}
-```
-
-```{r}
-compute_statistics_ar1 <- function(estimates, true_param) {
-  mean_estimates <- colMeans(estimates, na.rm = TRUE)
-  bias <- mean_estimates - true_param
-  sd_estimates <- apply(estimates, 2, sd, na.rm = TRUE)
-  
-  data.frame(
-    Parameter = "AR1",
-    Mean = mean_estimates,
-    Bias = bias,
-    SD = sd_estimates
-  )
-}
-```
-
-```{r}
-analyze_results_ar3_to_ar1 <- function(results, true_param) {
+summarize_results_by_N_phi <- function(results, n_values, ar_values) {
   summary_list <- list()
   
-  for (N in names(results[[1]])) {
-    estimates_all <- get_estimates_ar1(results, N)
-    summary_list[[N]] <- compute_statistics_ar1(estimates_all, true_param)
+  for (N in n_values) {
+    for (phi_index in seq_along(ar_values)) {
+      phi <- ar_values[phi_index]
+      
+      # Zbieranie wszystkich estymacji dla danej kombinacji N i phi
+      estimates_all <- do.call(rbind, lapply(results, function(rep) {
+        if (!is.null(rep[[paste0("N_", N)]])) {
+          return(rep[[paste0("N_", N)]]$estimates[phi_index, , drop = FALSE])
+        }
+        return(NULL)
+      }))
+      
+      # Obliczenie średnich, obciążenia i odchylenia standardowego
+      mean_estimates <- colMeans(estimates_all, na.rm = TRUE)
+      bias <- mean_estimates - 0  # Prawdziwa wartość: phi1 = 0, ponieważ generujemy AR(3) i dopasowujemy AR(1)
+      sd_estimates <- apply(estimates_all, 2, sd, na.rm = TRUE)
+      
+      summary_list[[paste0("N_", N, "_phi_", phi)]] <- data.frame(
+        Parameter = paste0("ϕ1"),
+        Mean = mean_estimates,
+        Bias = bias,
+        SD = sd_estimates
+      )
+    }
   }
   
   return(summary_list)
@@ -269,43 +169,10 @@ analyze_results_ar3_to_ar1 <- function(results, true_param) {
 ```
 
 ```{r}
-print_summary_ar3_to_ar1 <- function(summary_results) {
-  for (N in names(summary_results)) {
-    cat(paste0("Długość danych: ", N, "\n"))
-    print(summary_results[[N]])
-    cat("\n")
-  }
-}
-```
+# Podsumowanie wyników dla każdej kombinacji N i φ
+summary_results_by_N_phi <- summarize_results_by_N_phi(results2, n_values, ar_values)
 
-```{r}
-# Parametry
-true_param_ar1 <- 0.1  # Prawdziwa wartość parametru AR(1)
+# Wyświetlenie podsumowania
+display_summary_by_N_phi(summary_results_by_N_phi)
 
-# Analiza wyników
-summary_results_ar3_to_ar1 <- analyze_results_ar3_to_ar1(results_ar3_to_ar1, true_param_ar1)
-
-# Wyświetlenie wyników
-print_summary_ar3_to_ar1(summary_results_ar3_to_ar1)
-```
-```{r}
-# Parametry
-true_param_ar1 <- 0.5  # Prawdziwa wartość parametru AR(1)
-
-# Analiza wyników
-summary_results_ar3_to_ar1 <- analyze_results_ar3_to_ar1(results_ar3_to_ar1, true_param_ar1)
-
-# Wyświetlenie wyników
-print_summary_ar3_to_ar1(summary_results_ar3_to_ar1)
-```
-
-```{r}
-# Parametry
-true_param_ar1 <- 0.9  # Prawdziwa wartość parametru AR(1)
-
-# Analiza wyników
-summary_results_ar3_to_ar1 <- analyze_results_ar3_to_ar1(results_ar3_to_ar1, true_param_ar1)
-
-# Wyświetlenie wyników
-print_summary_ar3_to_ar1(summary_results_ar3_to_ar1)
 ```
