@@ -21,9 +21,6 @@ results <- vector("list", n_reps)
 ```
 
 ```{r}
-n_values <- c(50, 100, 1000)
-ar_values <- c(.1, .5, .9)
-
 for (rep in 1:n_reps) {
   rep_results <- list()
   
@@ -66,7 +63,7 @@ summarize_estimates <- function(estimates_all, true_params) {
   sd_estimates <- apply(estimates_all, 2, sd, na.rm = TRUE)
   
   data.frame(
-    Parameter = paste0("AR", 1:3),
+    Parameter = paste0("ϕ", 1:3),
     Mean = mean_estimates,
     Bias = bias,
     SD = sd_estimates
@@ -89,10 +86,12 @@ analyze_all <- function(results, true_params) {
 
 ```{r}
 display_summary <- function(summary_results) {
-  for (N in names(summary_results)) {
-    cat(paste0("Długość danych: ", N, "\n"))
-    print(summary_results[[N]])
+  i = 1
+  for (x in names(summary_results)) {
+    cat(paste0("Parametr phi: ", ar_values[i], "\n"))
+    print(summary_results[[x]])
     cat("\n")
+    i = i + 1
   }
 }
 ```
@@ -100,7 +99,7 @@ display_summary <- function(summary_results) {
 ```{r}
 combine_estimates_for_N <- function(results, N) {
   estimates_all <- do.call(rbind, lapply(results, function(rep) rep[[N]]$estimates))
-  colnames(estimates_all) <- paste0("AR", 1:3)
+  colnames(estimates_all) <- paste0("ϕ", 1:3)
   return(estimates_all)
 }
 ```
@@ -130,13 +129,12 @@ plot_histograms <- function(estimates_df_long) {
 
 ```{r}
 # Podsumowanie wyników
-true_params <- c(.1, .5, .9)  # Prawdziwe parametry AR(1)
-summary_results <- analyze_all(results, true_params)
+summary_results <- analyze_all(results, ar_values)
 
 # Wyświetlanie podsumowania
 display_summary(summary_results)
 
-# Analiza dla konkretnej długości danych (N=1000)
+# Analiza dla konkretnej długości danych (N=50)
 N_focus <- "N_50"
 estimates_all <- combine_estimates_for_N(results, N_focus)
 
@@ -149,27 +147,25 @@ plot_histograms(estimates_df_long)
 
 ```{r}
 # Podsumowanie wyników
-true_params <- c(.1, .5, .9)  # Prawdziwe parametry AR(1)
-summary_results <- analyze_all(results, true_params)
+summary_results <- analyze_all(results, ar_values)
 
 # Wyświetlanie podsumowania
 display_summary(summary_results)
 
-# Analiza dla konkretnej długości danych (N=1000)
+# Analiza dla konkretnej długości danych (N=100)
 N_focus <- "N_100"
 estimates_all <- combine_estimates_for_N(results, N_focus)
 
 # Przygotowanie danych do wykresów
 estimates_df_long <- prepare_data_for_plot(estimates_all)
 
-# Tworzenie histogramów N_50
+# Tworzenie histogramów N_100
 plot_histograms(estimates_df_long)
 ```
 
 ```{r}
 # Podsumowanie wyników
-true_params <- c(.1, .5, .9)  # Prawdziwe parametry AR(1)
-summary_results <- analyze_all(results, true_params)
+summary_results <- analyze_all(results, ar_values)
 
 # Wyświetlanie podsumowania
 display_summary(summary_results)
@@ -181,7 +177,7 @@ estimates_all <- combine_estimates_for_N(results, N_focus)
 # Przygotowanie danych do wykresów
 estimates_df_long <- prepare_data_for_plot(estimates_all)
 
-# Tworzenie histogramów N_50
+# Tworzenie histogramów N_1000
 plot_histograms(estimates_df_long)
 ```
 
