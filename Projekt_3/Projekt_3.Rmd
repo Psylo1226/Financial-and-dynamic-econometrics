@@ -1,7 +1,7 @@
 ---
 title: "Projekt_3"
 author: "Kamil Sarzyniak, Piotr Stawarski"
-date: '2024-11-06'
+date: '2024-11-24'
 output: pdf
 ---
 
@@ -186,7 +186,7 @@ plot_histograms(estimates_df_long)
 ```
 
 ```{r}
-generate_ar3_data <- function(N, params = c(0.1, 0.5, 0.3)) {
+generate_ar3_data <- function(N, params = c(0.1, 0.5, 0.9)) {
   arima.sim(list(order = c(3, 0, 0), ar = params), n = N)
 }
 ```
@@ -198,7 +198,7 @@ fit_ar1 <- function(data) {
 ```
 
 ```{r}
-analyze_single_simulation <- function(N, params = c(0.1, 0.5, 0.3)) {
+analyze_single_simulation <- function(N, params = c(0.1, 0.5, 0.9)) {
   estimates <- matrix(NA, nrow = 1, ncol = 1)
   stderrs <- matrix(NA, nrow = 1, ncol = 1)
   residual_acf <- matrix(NA, nrow = 1, ncol = 20)
@@ -217,7 +217,7 @@ analyze_single_simulation <- function(N, params = c(0.1, 0.5, 0.3)) {
 ```
 
 ```{r}
-run_simulation_ar3_to_ar1 <- function(n_values, n_reps, params = c(0.1, 0.5, 0.3)) {
+run_simulation_ar3_to_ar1 <- function(n_values, n_reps, params = c(0.1, 0.5, 0.9)) {
   results <- vector("list", n_reps)
   
   for (rep in 1:n_reps) {
@@ -236,7 +236,7 @@ run_simulation_ar3_to_ar1 <- function(n_values, n_reps, params = c(0.1, 0.5, 0.3
 # Parametry symulacji
 n_values <- c(50, 100, 1000)
 n_reps <- 1000
-ar3_params <- c(0.1, 0.5, 0.3)
+ar3_params <- c(0.1, 0.5, 0.9)
 
 # Uruchomienie symulacji
 results_ar3_to_ar1 <- run_simulation_ar3_to_ar1(n_values, n_reps, ar3_params)
@@ -296,4 +296,24 @@ summary_results_ar3_to_ar1 <- analyze_results_ar3_to_ar1(results_ar3_to_ar1, tru
 # Wyświetlenie wyników
 print_summary_ar3_to_ar1(summary_results_ar3_to_ar1)
 ```
+```{r}
+# Parametry
+true_param_ar1 <- 0.5  # Prawdziwa wartość parametru AR(1)
 
+# Analiza wyników
+summary_results_ar3_to_ar1 <- analyze_results_ar3_to_ar1(results_ar3_to_ar1, true_param_ar1)
+
+# Wyświetlenie wyników
+print_summary_ar3_to_ar1(summary_results_ar3_to_ar1)
+```
+
+```{r}
+# Parametry
+true_param_ar1 <- 0.9  # Prawdziwa wartość parametru AR(1)
+
+# Analiza wyników
+summary_results_ar3_to_ar1 <- analyze_results_ar3_to_ar1(results_ar3_to_ar1, true_param_ar1)
+
+# Wyświetlenie wyników
+print_summary_ar3_to_ar1(summary_results_ar3_to_ar1)
+```
