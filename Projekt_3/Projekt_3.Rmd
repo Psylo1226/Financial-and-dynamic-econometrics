@@ -90,6 +90,68 @@ analyze_all <- function(results, true_params) {
 ```
 
 ```{r}
+display_summary <- function(summary_results) {
+  for (N in names(summary_results)) {
+    cat(paste0("Długość danych: ", N, "\n"))
+    print(summary_results[[N]])
+    cat("\n")
+  }
+}
+```
+
+```{r}
+combine_estimates_for_N <- function(results, N) {
+  estimates_all <- do.call(rbind, lapply(results, function(rep) rep[[N]]$estimates))
+  colnames(estimates_all) <- paste0("AR", 1:3)
+  return(estimates_all)
+}
+```
+
+```{r}
+prepare_data_for_plot <- function(estimates_all) {
+  estimates_df <- data.frame(estimates_all)
+  estimates_df_long <- estimates_df %>%
+    pivot_longer(cols = everything(), names_to = "variable", values_to = "value")
+  return(estimates_df_long)
+}
+```
+
+```{r}
+plot_histograms <- function(estimates_df_long) {
+  ggplot(estimates_df_long, aes(x = value)) +
+    geom_histogram(bins = 30, color = "black", fill = "skyblue", alpha = 0.7) +
+    facet_wrap(~variable, scales = "free", ncol = 1) +
+    theme_minimal() +
+    labs(
+      title = "Rozkład estymatorów parametrów AR(3) przy danych z AR(1)",
+      x = "Wartość estymatora",
+      y = "Częstość"
+    )
+}
+```
+
+```{r}
+# Podsumowanie wyników
+true_params <- c(.1, .5, .9)  # Prawdziwe parametry AR(1)
+summary_results <- analyze_all(results, true_params)
+
+# Wyświetlanie podsumowania
+display_summary(summary_results)
+
+# Analiza dla konkretnej długości danych (N=1000)
+N_focus <- "N_1000"
+estimates_all <- combine_estimates_for_N(results, N_focus)
+
+# Przygotowanie danych do wykresów
+estimates_df_long <- prepare_data_for_plot(estimates_all)
+```
+
+```{r}
+# Tworzenie histogramów
+plot_histograms(estimates_df_long)
+```
+
+```{r}
 # Analiza wyników
 true_params <- c(.1, .5, .9)  # Prawdziwe parametry AR(1)
 summary_results <- analyze_all(results, true_params)
@@ -121,6 +183,7 @@ ggplot(estimates_df_long, aes(x = value)) +
     y = "Częstość"
   )
 ```
+
 ```{r}
 # Generacja danych z AR(3) i dopasowanie modelu AR(1)
 results_ar3_to_ar1 <- vector("list", n_reps)
