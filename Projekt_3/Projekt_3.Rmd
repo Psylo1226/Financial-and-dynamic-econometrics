@@ -56,30 +56,38 @@ for (rep in 1:n_reps) {
 ```
 
 ```{r}
-# Funkcja do obliczenia błędu obciążenia i odchylenia standardowego estymatorów
-analyze_results <- function(results, true_params) {
+combine_estimates <- function(results, N) {
+  do.call(rbind, lapply(results, function(rep) rep[[N]]$estimates))
+}
+```
+
+```{r}
+summarize_estimates <- function(estimates_all, true_params) {
+  mean_estimates <- colMeans(estimates_all, na.rm = TRUE)
+  bias <- mean_estimates - true_params
+  sd_estimates <- apply(estimates_all, 2, sd, na.rm = TRUE)
+  
+  data.frame(
+    Parameter = paste0("AR", 1:3),
+    Mean = mean_estimates,
+    Bias = bias,
+    SD = sd_estimates
+  )
+}
+```
+
+```{r}
+analyze_all <- function(results, true_params) {
   summary_list <- list()
   
   for (N in names(results[[1]])) {
-    estimates_all <- do.call(rbind, lapply(results, function(rep) rep[[N]]$estimates))
-    
-    mean_estimates <- colMeans(estimates_all, na.rm = TRUE)
-    bias <- mean_estimates - true_params
-    sd_estimates <- apply(estimates_all, 2, sd, na.rm = TRUE)
-    
-    summary_list[[N]] <- data.frame(
-      Parameter = paste0("AR", 1:3),
-      Mean = mean_estimates,
-      Bias = bias,
-      SD = sd_estimates
-    )
+    estimates_all <- combine_estimates(results, N)
+    summary_list[[N]] <- summarize_estimates(estimates_all, true_params)
   }
   
   return(summary_list)
 }
 ```
-
-
 
 ```{r}
 # Analiza wyników
