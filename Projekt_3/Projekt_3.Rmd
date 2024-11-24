@@ -152,99 +152,114 @@ plot_histograms(estimates_df_long)
 ```
 
 ```{r}
-# Analiza wyników
-true_params <- c(.1, .5, .9)  # Prawdziwe parametry AR(1)
-summary_results <- analyze_all(results, true_params)
-
-# Wyświetlenie wyników dla różnych długości N
-for (N in names(summary_results)) {
-  cat(paste0("Długość danych: ", N, "\n"))
-  print(summary_results[[N]])
-  cat("\n")
+generate_ar3_data <- function(N, params = c(0.1, 0.5, 0.3)) {
+  arima.sim(list(order = c(3, 0, 0), ar = params), n = N)
 }
-
-# Wizualizacja rozkładów estymatorów dla N=1000
-N_focus <- "N_1000"
-estimates_all <- do.call(rbind, lapply(results, function(rep) rep[[N_focus]]$estimates))
-colnames(estimates_all) <- paste0("AR", 1:3)
-
-# Histogramy oszacowań parametrów
-estimates_df <- data.frame(estimates_all)
-estimates_df_long <- estimates_df %>%
-  pivot_longer(cols = everything(), names_to = "variable", values_to = "value")
-
-ggplot(estimates_df_long, aes(x = value)) +
-  geom_histogram(bins = 30, color = "black", fill = "skyblue", alpha = 0.7) +
-  facet_wrap(~variable, scales = "free", ncol = 1) +
-  theme_minimal() +
-  labs(
-    title = "Rozkład estymatorów parametrów AR(3) przy danych z AR(1)",
-    x = "Wartość estymatora",
-    y = "Częstość"
-  )
 ```
 
 ```{r}
-# Generacja danych z AR(3) i dopasowanie modelu AR(1)
-results_ar3_to_ar1 <- vector("list", n_reps)
+fit_ar1 <- function(data) {
+  Arima(data, order = c(1, 0, 0))
+}
+```
 
-for (rep in 1:n_reps) {
-  rep_results <- list()
+```{r}
+analyze_single_simulation <- function(N, params = c(0.1, 0.5, 0.3)) {
+  estimates <- matrix(NA, nrow = 1, ncol = 1)
+  stderrs <- matrix(NA, nrow = 1, ncol = 1)
+  residual_acf <- matrix(NA, nrow = 1, ncol = 20)
   
-  for (N in n_values) {
-    estimates <- matrix(NA, nrow = N, ncol = 1)
-    stderrs <- matrix(NA, nrow = N, ncol = 1)
-    residual_acf <- matrix(NA, nrow = N, ncol = 20)
-    
-    xt_ar3 <- arima.sim(list(order = c(3, 0, 0), ar = c(.1, .5, .3)), n = N)
-    xt_ar1 <- Arima(xt_ar3, order = c(1, 0, 0))
-    
-    estimates[1, ] <- xt_ar1$coef[1]
-    stderrs[1, ] <- sqrt(diag(xt_ar1$var.coef))[1]
-    residual_acf[1, ] <- acf(residuals(xt_ar1), plot = FALSE)$acf[2:21]
-    
-    rep_results[[paste0("N_", N)]] <- list(
-      estimates = estimates,
-      stderrs = stderrs,
-      residual_acf = residual_acf
-    )
-  }
-  results_ar3_to_ar1[[rep]] <- rep_results
+  # Generacja danych i dopasowanie modelu
+  xt_ar3 <- generate_ar3_data(N, params)
+  xt_ar1 <- fit_ar1(xt_ar3)
+  
+  # Zapisywanie wyników
+  estimates[1, ] <- xt_ar1$coef[1]
+  stderrs[1, ] <- sqrt(diag(xt_ar1$var.coef))[1]
+  residual_acf[1, ] <- acf(residuals(xt_ar1), plot = FALSE)$acf[2:21]
+  
+  return(list(estimates = estimates, stderrs = stderrs, residual_acf = residual_acf))
 }
 ```
 
+```{r}
+run_simulation_ar3_to_ar1 <- function(n_values, n_reps, params = c(0.1, 0.5, 0.3)) {
+  results <- vector("list", n_reps)
+  
+  for (rep in 1:n_reps) {
+    rep_results <- list()
+    for (N in n_values) {
+      rep_results[[paste0("N_", N)]] <- analyze_single_simulation(N, params)
+    }
+    results[[rep]] <- rep_results
+  }
+  
+  return(results)
+}
+```
 
 ```{r}
-# Analiza wyników dla AR(3) -> AR(1)
-true_param_ar1 <- 0.1  # Oczekiwany parametr w przypadku dopasowania AR(1)
+# Parametry symulacji
+n_values <- c(50, 100, 1000)
+n_reps <- 1000
+ar3_params <- c(0.1, 0.5, 0.3)
 
-analyze_ar3_to_ar1 <- function(results, true_param) {
+# Uruchomienie symulacji
+results_ar3_to_ar1 <- run_simulation_ar3_to_ar1(n_values, n_reps, ar3_params)
+```
+
+```{r}
+get_estimates_ar1 <- function(results, N) {
+  do.call(rbind, lapply(results, function(rep) rep[[N]]$estimates))
+}
+```
+
+```{r}
+compute_statistics_ar1 <- function(estimates, true_param) {
+  mean_estimates <- colMeans(estimates, na.rm = TRUE)
+  bias <- mean_estimates - true_param
+  sd_estimates <- apply(estimates, 2, sd, na.rm = TRUE)
+  
+  data.frame(
+    Parameter = "AR1",
+    Mean = mean_estimates,
+    Bias = bias,
+    SD = sd_estimates
+  )
+}
+```
+
+```{r}
+analyze_results_ar3_to_ar1 <- function(results, true_param) {
   summary_list <- list()
   
   for (N in names(results[[1]])) {
-    estimates_all <- do.call(rbind, lapply(results, function(rep) rep[[N]]$estimates))
-    
-    mean_estimates <- colMeans(estimates_all, na.rm = TRUE)
-    bias <- mean_estimates - true_param
-    sd_estimates <- apply(estimates_all, 2, sd, na.rm = TRUE)
-    
-    summary_list[[N]] <- data.frame(
-      Parameter = "AR1",
-      Mean = mean_estimates,
-      Bias = bias,
-      SD = sd_estimates
-    )
+    estimates_all <- get_estimates_ar1(results, N)
+    summary_list[[N]] <- compute_statistics_ar1(estimates_all, true_param)
   }
   
   return(summary_list)
 }
+```
 
-# Analiza wyników
-summary_results_ar3_to_ar1 <- analyze_ar3_to_ar1(results_ar3_to_ar1, true_param_ar1)
-
-for (N in names(summary_results_ar3_to_ar1)) {
-  cat(paste0("Długość danych: ", N, "\n"))
-  print(summary_results_ar3_to_ar1[[N]])
-  cat("\n")
+```{r}
+print_summary_ar3_to_ar1 <- function(summary_results) {
+  for (N in names(summary_results)) {
+    cat(paste0("Długość danych: ", N, "\n"))
+    print(summary_results[[N]])
+    cat("\n")
+  }
 }
 ```
+
+```{r}
+# Parametry
+true_param_ar1 <- 0.1  # Prawdziwa wartość parametru AR(1)
+
+# Analiza wyników
+summary_results_ar3_to_ar1 <- analyze_results_ar3_to_ar1(results_ar3_to_ar1, true_param_ar1)
+
+# Wyświetlenie wyników
+print_summary_ar3_to_ar1(summary_results_ar3_to_ar1)
+```
+
