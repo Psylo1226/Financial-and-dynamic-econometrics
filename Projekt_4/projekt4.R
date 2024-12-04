@@ -1,75 +1,218 @@
+# Wymagane pakiety
 library(vars)
-library(sandwich)
-library(lmtest)
+library(knitr)
+library(kableExtra)
 library(ggplot2)
-library(MASS)
+library(dplyr)
 
-
+# Funkcja do symulacji danych VAR z różnymi wariancjami składników losowych
 simulate_var <- function(n1, n2, phi, sigma, k) {
-  # Parametry VAR(1)
-  A <- matrix(c(phi, 0.2, 0.2, phi), nrow = 2) # Macierz autoregresji
-  sigma_mat <- diag(c(sigma, sigma))          # Macierz kowariancji
+  n <- n1 + n2
+  errors <- matrix(rnorm(n * 2, mean = 0, sd = sigma), ncol = 2)
+  errors[(n1 + 1):n, ] <- errors[(n1 + 1):n, ] * k  # Zwiększenie wariancji w drugiej części
   
-  # Pierwsza część danych: stała wariancja
-  eps1 <- mvrnorm(n1, mu = c(0, 0), Sigma = sigma_mat)
-  data1 <- matrix(0, n1, 2)
-  for (t in 2:n1) {
-    data1[t, ] <- A %*% data1[t - 1, ] + eps1[t, ]
+  data <- matrix(0, nrow = n, ncol = 2)
+  for (t in 2:n) {
+    data[t, 1] <- phi * data[t - 1, 1] + errors[t, 1]
+    data[t, 2] <- phi * data[t - 1, 2] + errors[t, 2]
   }
-  
-  # Druga część danych: zwiększona wariancja
-  sigma_mat2 <- diag(c(k * sigma, k * sigma)) # Zmieniona macierz kowariancji
-  eps2 <- mvrnorm(n2, mu = c(0, 0), Sigma = sigma_mat2)
-  data2 <- matrix(0, n2, 2)
-  data2[1, ] <- data1[n1, ] # Kontynuacja z poprzedniego końca
-  for (t in 2:n2) {
-    data2[t, ] <- A %*% data2[t - 1, ] + eps2[t, ]
-  }
-  
-  # Połączenie danych
-  data <- rbind(data1, data2)
-  
-  # Dodaj nazwy kolumn
   colnames(data) <- c("V1", "V2")
-  
-  return(data)
+  return(as.data.frame(data))
 }
 
-
-
-test_granger <- function(data, lags, hc_type) {
-  # Dopasowanie modelu VAR
+# Funkcja do przeprowadzania testu Grangera
+test_granger <- function(data, lags, hc_type = "HC3") {
   var_model <- VAR(data, p = lags, type = "const")
-  
-  # Test Grangera
   granger_test <- causality(var_model, cause = "V1")
-  
-  return(list(granger = granger_test))
+  p_value <- granger_test$Granger$p.value
+  return(p_value)
 }
-
-
-
 
 # Parametry symulacji
-n1 <- 100
-n2 <- 100
-phi_values <- c(0.2, 0.5, 0.8) # Siła autokorelacji
-k_values <- c(1.5, 2, 3)       # Wzrost wariancji
-lags <- 1
-sigma <- 1
-reps <- 100
+phi_values <- c(0.3, 0.6)  # Autokorelacja
+k_values <- seq(1.0, 2.0, by = 0.25)  # Wzrost wariancji
+n1 <- 100  # Liczba obserwacji przed zmianą wariancji
+n2 <- 100  # Liczba obserwacji po zmianie wariancji
+lags <- 1  # Opóźnienia w modelu VAR
+sigma <- 1  # Początkowe odchylenie standardowe
+reps <- 50  # Liczba powtórzeń symulacji
 
-# Wyniki
-results <- list()
+# Pętla symulacyjna
+results <- data.frame()
+set.seed(123)  # Ustawienie ziarna losowego
 
 for (phi in phi_values) {
   for (k in k_values) {
     for (rep in 1:reps) {
       data <- simulate_var(n1, n2, phi, sigma, k)
-      test <- test_granger(data, lags, hc_type = "HC3")
-      results[[paste(phi, k, rep)]] <- test
+      p_value <- test_granger(data, lags, hc_type = "HC3")
+      results <- rbind(results, data.frame(phi = phi, k = k, rep = rep, p_value = p_value))
     }
   }
 }
 
-# Analiza wyników (rozmiar testu, moc itp.)
+# Dodanie informacji o odrzuceniu H0 (p-value < 0.05)
+results <- results %>%
+  mutate(reject_h0 = ifelse(p_value < 0.05, TRUE, FALSE))
+
+
+###Wizualizacje
+# Obliczenie średniego odsetka odrzuceń H0 dla każdej kombinacji phi i k
+summary_results <- results %>%
+  group_by(phi, k) %>%
+  summarize(reject_rate = mean(reject_h0), .groups = "drop")
+
+# Wykres
+ggplot(summary_results, aes(x = k, y = reject_rate, color = as.factor(phi), group = phi)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  labs(
+    title = "Wpływ wzrostu wariancji (k) na odsetek odrzuceń H0",
+    x = "Wzrost wariancji (k)",
+    y = "Odsetek odrzuceń H0",
+    color = "Phi (autokorelacja)"
+  ) +
+  theme_minimal()
+
+
+
+
+
+# Obliczenie średniego p-value dla każdej kombinacji phi i k
+p_value_summary <- results %>%
+  group_by(phi, k) %>%
+  summarize(mean_p_value = mean(p_value), .groups = "drop")
+
+# Wykres
+ggplot(p_value_summary, aes(x = phi, y = mean_p_value, group = k, color = as.factor(k))) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  labs(
+    title = "Wpływ autokorelacji (phi) na średnie p-value",
+    x = "Autokorelacja (phi)",
+    y = "Średnie p-value",
+    color = "Wzrost wariancji (k)"
+  ) +
+  theme_minimal()
+
+
+
+
+
+
+# Wymagane pakiety
+library(vars)
+library(ggplot2)
+library(dplyr)
+
+# Funkcja do symulacji danych VAR z różnymi wariancjami składników losowych
+simulate_var <- function(n1, n2, phi, sigma, k) {
+  n <- n1 + n2
+  errors <- matrix(rnorm(n * 2, mean = 0, sd = sigma), ncol = 2)
+  errors[(n1 + 1):n, ] <- errors[(n1 + 1):n, ] * k  # Zwiększenie wariancji w drugiej części
+  
+  data <- matrix(0, nrow = n, ncol = 2)
+  for (t in 2:n) {
+    data[t, 1] <- phi * data[t - 1, 1] + errors[t, 1]
+    data[t, 2] <- phi * data[t - 1, 2] + errors[t, 2]
+  }
+  colnames(data) <- c("V1", "V2")
+  return(as.data.frame(data))
+}
+
+# Funkcja do przeprowadzania testu Grangera
+test_granger <- function(data, lags, hc_type = "HC3") {
+  var_model <- VAR(data, p = lags, type = "const")
+  granger_test <- causality(var_model, cause = "V1")
+  p_value <- granger_test$Granger$p.value
+  return(p_value)
+}
+
+# Parametry symulacji
+phi_values <- c(0.3, 0.6)  # Autokorelacja
+k_values <- seq(1.0, 2.0, by = 0.25)  # Wzrost wariancji
+n1 <- 100  # Liczba obserwacji przed zmianą wariancji
+n2 <- 100  # Liczba obserwacji po zmianie wariancji
+lags <- 1  # Opóźnienia w modelu VAR
+sigma <- 1  # Początkowe odchylenie standardowe
+reps <- 50  # Liczba powtórzeń symulacji
+
+# Pętla symulacyjna
+results <- data.frame()
+set.seed(123)  # Ustawienie ziarna losowego
+
+for (phi in phi_values) {
+  for (k in k_values) {
+    for (rep in 1:reps) {
+      data <- simulate_var(n1, n2, phi, sigma, k)
+      p_value <- test_granger(data, lags, hc_type = "HC3")
+      results <- rbind(results, data.frame(phi = phi, k = k, rep = rep, p_value = p_value))
+    }
+  }
+}
+
+# Dodanie informacji o odrzuceniu H0 (p-value < 0.05)
+results <- results %>%
+  mutate(reject_h0 = ifelse(p_value < 0.05, TRUE, FALSE))
+# Obliczenie średniego odsetka odrzuceń H0 dla każdej kombinacji phi i k
+summary_results <- results %>%
+  group_by(phi, k) %>%
+  summarize(reject_rate = mean(reject_h0), .groups = "drop")
+
+# Wykres
+ggplot(summary_results, aes(x = k, y = reject_rate, color = as.factor(phi), group = phi)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  labs(
+    title = "Wpływ wzrostu wariancji (k) na odsetek odrzuceń H0",
+    x = "Wzrost wariancji (k)",
+    y = "Odsetek odrzuceń H0",
+    color = "Phi (autokorelacja)"
+  ) +
+  theme_minimal()
+
+
+
+
+# Obliczenie średniego p-value dla każdej kombinacji phi i k
+p_value_summary <- results %>%
+  group_by(phi, k) %>%
+  summarize(mean_p_value = mean(p_value), .groups = "drop")
+
+# Wykres
+ggplot(p_value_summary, aes(x = phi, y = mean_p_value, group = k, color = as.factor(k))) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  labs(
+    title = "Wpływ autokorelacji (phi) na średnie p-value",
+    x = "Autokorelacja (phi)",
+    y = "Średnie p-value",
+    color = "Wzrost wariancji (k)"
+  ) +
+  theme_minimal()
+
+
+# Wykres dla phi = 0.3 i phi = 0.6
+ggplot(results, aes(x = k, y = p_value, color = as.factor(phi))) +
+  geom_jitter(width = 0.1, alpha = 0.5) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(
+    title = "Wpływ wzrostu wariancji (k) na p-value testu Grangera",
+    x = "Wzrost wariancji (k)",
+    y = "p-value testu Grangera",
+    color = "Phi (autokorelacja)"
+  ) +
+  theme_minimal()
+
+
+
+# Tabela podsumowująca odsetek odrzuceń H0
+summary_table <- summary_results %>%
+  pivot_wider(names_from = phi, values_from = reject_rate) %>%
+  rename(`Phi = 0.3` = `0.3`, `Phi = 0.6` = `0.6`)
+
+# Generowanie tabeli
+summary_table %>%
+  kable("html", caption = "Podsumowanie wyników: Odsetek odrzuceń H0 dla różnych phi i k") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
