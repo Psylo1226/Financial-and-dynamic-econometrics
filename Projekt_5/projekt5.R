@@ -1,0 +1,1 @@
+dane <- read.csv2("nvda_us_d.csv")
