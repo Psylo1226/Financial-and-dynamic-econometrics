@@ -23,32 +23,32 @@ modele <- function(dt) {
   #Modele Garch z dynamicznie przypisywaną specyfikacją
   specs <- list(
     ugarchspec(
-      variance.model = list(model = "sGARCH"),
+      variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
       mean.model = list(armaOrder = c(ar_order, ma_order)),
       distribution.model = "norm"
     ),
     ugarchspec(
-      variance.model = list(model = "sGARCH"),
+      variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
       mean.model = list(armaOrder = c(ar_order, ma_order)),
       distribution.model = "std"
     ),
     ugarchspec(
-      variance.model = list(model = "gjrGARCH"),
+      variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1)),
       mean.model = list(armaOrder = c(ar_order, ma_order)),
       distribution.model = "norm"
     ),
     ugarchspec(
-      variance.model = list(model = "gjrGARCH"),
+      variance.model = list(model = "gjrGARCH", garchOrder = c(1, 1)),
       mean.model = list(armaOrder = c(ar_order, ma_order)),
       distribution.model = "std"
     ),
     ugarchspec(
-      variance.model = list(model = "eGARCH"),
+      variance.model = list(model = "eGARCH", garchOrder = c(1, 1)),
       mean.model = list(armaOrder = c(ar_order, ma_order)),
       distribution.model = "norm"
     ),
     ugarchspec(
-      variance.model = list(model = "eGARCH"),
+      variance.model = list(model = "eGARCH", garchOrder = c(1, 1)),
       mean.model = list(armaOrder = c(ar_order, ma_order)),
       distribution.model = "std"
     )
@@ -62,6 +62,8 @@ modele <- function(dt) {
     results[i,3] = quantile(fc, probs = 0.05)
     i = i + 1
   }
+  results <- as.data.frame(results)
+  colnames(results) <- c("Metoda", "VaR_1%", "VaR_5%")
   return(results)
 }
 
@@ -71,6 +73,8 @@ historyczna <- function(dt) {
   results[,1] <- c("Historyczna")
   results[,2] <- quantile(dt, probs = 0.01)
   results[,3] <- quantile(dt, probs = 0.05)
+  results <- as.data.frame(results)
+  colnames(results) <- c("Metoda", "VaR_1%", "VaR_5%")
   return(results)
 }
 
@@ -82,6 +86,8 @@ macierzv <- function(dt) {
   results[,1] <- c("Macierz wariancji")
   results[,2] <- mu + qnorm(0.01) * sd
   results[,3] <- mu + qnorm(0.05) * sd
+  results <- as.data.frame(results)
+  colnames(results) <- c("Metoda", "VaR_1%", "VaR_5%")
   return(results)
 }
 
@@ -93,14 +99,20 @@ symulacje <- function() {
   for (j in 1:(nrow(dane)-end)) {
     print(j)
     df <- diff(log(dane[j:(j+end),2]))
-    wyniki1[[j]] <- modele(df)
+    wyniki1[[j]] <- tryCatch({
+      modele(df)
+    }, error = function(e) {
+      # W przypadku błędu zwróć poprzednie wyniki
+      last_valid
+    })
+    if (!is.null(wyniki1[[j]])) last_valid <- wyniki1[[j]]
     wyniki2[[j]] <- historyczna(df)
     wyniki3[[j]] <- macierzv(df)
   }
-  return(list(ModeleGarch <- wyniki1, MetodaHistoryczna <- wyniki2, MetodaMacierzy <- wyniki3))
+  return(list(ModeleGarch = wyniki1, MetodaHistoryczna = wyniki2, MetodaMacierzy = wyniki3))
 }
 
 r <- symulacje()
 
-
+plot
 
