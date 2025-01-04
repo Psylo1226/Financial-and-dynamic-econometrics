@@ -130,6 +130,10 @@ combined$`VaR_5%` <- as.numeric(combined$`VaR_5%`)
 combined_1 <- combined %>%
   select(Typ, Notowanie, Metoda, `VaR_1%`)
 
+combined_1_garch <- combined %>%
+  filter(Typ == "ModeleGarch") %>%
+  select(Typ, Notowanie, Metoda, `VaR_1%`)
+
 # Wykres
 ggplot(combined_1, aes(x = Notowanie, y = `VaR_1%`, color = Metoda)) +
   geom_line(size = 1) +
@@ -142,3 +146,24 @@ ggplot(combined_1, aes(x = Notowanie, y = `VaR_1%`, color = Metoda)) +
        color = "Metoda") +
   theme_minimal()
 
+
+#Wykres garch
+ggplot(combined_1[combined_1$Typ=="ModeleGarch",], aes(x = Notowanie, y = `VaR_1%`, color = Metoda)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(title = "Zmiany wyników dla ModeleGarch",
+       x = "Notowanie",
+       y = "Wynik (VaR 1%)",
+       color = "Metoda") +
+  theme_minimal()
+
+#Garch osobno
+ggplot(combined_1[combined_1$Typ=="ModeleGarch",], aes(x = Notowanie, y = `VaR_1%`, color = Metoda)) +
+  geom_line(size = 1) + 
+  geom_point(size = 2) + 
+  facet_wrap(~ Metoda) +
+  labs(title = "Zmiany wyników dla ModeleGarch",
+       x = "Notowanie",
+       y = "Wynik (VaR 1%)",
+       color = "Metoda") +
+  theme_minimal()
