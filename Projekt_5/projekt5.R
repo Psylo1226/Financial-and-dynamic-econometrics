@@ -1,6 +1,9 @@
 library(zoo)
 library(rugarch)
 library(forecast)
+library(ggplot2)
+library(tidyr)
+library(tidyverse)
 
 dane <- read.csv("nvda_us_d.csv")
 dane <- dane[c(1,5)]
@@ -114,5 +117,28 @@ symulacje <- function() {
 
 r <- symulacje()
 
-plot
+######
+
+combined <- map_dfr(r, 
+                      ~ map_dfr(seq_along(.x), 
+                      function(i) .x[[i]] %>% mutate(Notowanie = i + nrow(batch))), 
+                      .id = "Typ"
+)
+combined$`VaR_1%` <- as.numeric(combined$`VaR_1%`)
+combined$`VaR_5%` <- as.numeric(combined$`VaR_5%`)
+
+combined_1 <- combined %>%
+  select(Typ, Notowanie, Metoda, `VaR_1%`)
+
+# Wykres
+ggplot(combined_1, aes(x = Notowanie, y = `VaR_1%`, color = Metoda)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  facet_wrap(~ Typ, scales = "fixed") +
+  scale_x_continuous(breaks = seq(min(combined_1$Notowanie), max(combined_1$Notowanie), by = 500)) + 
+  labs(title = "Zmiany wyników modeli dla VaR 1%",
+       x = "Notowanie",
+       y = "Wynik (VaR 1%)",
+       color = "Metoda") +
+  theme_minimal()
 
