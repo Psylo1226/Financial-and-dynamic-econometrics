@@ -12,29 +12,26 @@ merged <- llb %>%
   inner_join(att, by = c("X.DATE.","X.TIME.")) %>%
   inner_join(tpe, by = c("X.DATE.","X.TIME."))
 
+colnames(merged) <- c("Date","Time","11B","ATT","TPE")
 merged$Time <- merged$Time/100
 
-colnames(merged) <- c("Date","Time","11B","ATT","TPE")
+stopy <- list()
+for (i in seq(from = 5, to = 30, by = 5)) {
+  minutes <- seq(from = 905, to = 1645, by = i)
 
-min10 <- seq(from=905,to=1645,by=10)
-min15 <- seq(from=905,to=1645,by=15)
-min20 <- seq(from=905,to=1645,by=20)
-min25 <- seq(from=905,to=1645,by=25)
-min30 <- seq(from=905,to=1645,by=30)
+  stopy[[i / 5]] <- merged[merged$Time %in% minutes, ] %>%
+    group_by(Date) %>%
+    reframe(across(c(`11B`, ATT, TPE), ~ diff(log(.)))) %>%
+    ungroup()
+  stopy[[i / 5]] <- stopy[[i / 5]][-1]
+}
 
-stopy5 <- apply(merged[,c(3:5)], 2, function(x) diff(log(x)))
-stopy10 <- apply(merged[merged$Time %in% min10,c(3:5)], 2, function(x) diff(log(x)))
-stopy15 <- apply(merged[merged$Time %in% min15,c(3:5)], 2, function(x) diff(log(x)))
-stopy20 <- apply(merged[merged$Time %in% min20,c(3:5)], 2, function(x) diff(log(x)))
-stopy25 <- apply(merged[merged$Time %in% min25,c(3:5)], 2, function(x) diff(log(x)))
-stopy30 <- apply(merged[merged$Time %in% min30,c(3:5)], 2, function(x) diff(log(x)))
-
-c5 <- cor(stopy5, method = "spearman")
-c10 <- cor(stopy10, method = "spearman")
-c15 <- cor(stopy10, method = "spearman")
-c20 <- cor(stopy10, method = "spearman")
-c25 <- cor(stopy10, method = "spearman")
-c30 <- cor(stopy10, method = "spearman")
+c5 <- cor(stopy[[1]], method = "spearman")
+c10 <- cor(stopy[[2]], method = "spearman")
+c15 <- cor(stopy[[3]], method = "spearman")
+c20 <- cor(stopy[[4]], method = "spearman")
+c25 <- cor(stopy[[5]], method = "spearman")
+c30 <- cor(stopy[[6]], method = "spearman")
 
 
 
