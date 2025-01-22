@@ -1,5 +1,6 @@
 library(dplyr)
 library(reshape2)
+library(ggplot2)
 
 att <- read.csv("att.txt")
 tpe <- read.csv("tpe.txt")
@@ -41,12 +42,12 @@ lines(unlist(stopy[[1]][3]),col="green")
 
 
 
-c5 <- cor(stopy[[1]], method = "spearman")
-c10 <- cor(stopy[[2]], method = "spearman")
-c15 <- cor(stopy[[3]], method = "spearman")
-c20 <- cor(stopy[[4]], method = "spearman")
-c25 <- cor(stopy[[5]], method = "spearman")
-c30 <- cor(stopy[[6]], method = "spearman")
+c5 <- cor(stopy[[1]], method = "pearson")
+c10 <- cor(stopy[[2]], method = "pearson")
+c15 <- cor(stopy[[3]], method = "pearson")
+c20 <- cor(stopy[[4]], method = "pearson")
+c25 <- cor(stopy[[5]], method = "pearson")
+c30 <- cor(stopy[[6]], method = "pearson")
 
 m5 <- melt(c5)
 
