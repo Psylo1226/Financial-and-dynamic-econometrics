@@ -46,8 +46,8 @@ ggplot(pivot_zwroty, aes(x = Data, y = val, color = Indeks)) +
   geom_line() +
   geom_vline(xintercept = as.numeric(as.Date("2020-03-01")), linetype = "dashed", color = "black", linewidth = 0.6) +
   geom_vline(xintercept = as.numeric(as.Date("2022-02-24")), linetype = "dashed", color = "black", linewidth = 0.6) +
-  labs(title = "Wartości zamknięcia", x = "Data", y = "Wartość") +
-  theme_minimal()
+  labs(title = "Stopy zwrotu", x = "Data", y = "Wartość") +
+  theme_minimal() + ylim(-0.1, 0.1)
 
 #Covid
 
